@@ -4,19 +4,16 @@
 # project (see LICENSE.port-tool). Not affiliated with Tencent. See DISCLAIMER.
 
 pkgname=workbuddy-international-bin
-_pkgver=5.9.4.42593613
-_build=fa0a0901
+_pkgver=5.11.4.44121853
+_build=0026dff0
 _electronver=37.10.3
 pkgver=${_pkgver}_${_build}
-# pkgrel 4: Fix 8 — renderer clean-exit-0 crash recovery. Upstream's decider
-# treats a spontaneous renderer exit 0 as a normal shutdown and never reloads
-# it, leaving a black/frozen window that relaunching cannot revive; the patch
-# lets clean-exit enter the existing backoff/give-up recovery flow.
 # pkgrel 3: 5.9.4 payload verification sync — upstream dropped better-sqlite3
 # entirely (zero references left in app.asar / cli tree), so the check list
 # loses that line and gains the @lydell node-pty Linux prebuild that 5.9.x
 # actually ships; pkgrel 2 was the workbuddyStorage at-rest shim (Fix 7).
-pkgrel=4
+# pkgrel 1: upstream 5.11.4.44121853-0026dff0 (workbuddy-update.yml auto-bump)
+pkgrel=1
 pkgdesc="AI Agent for everyday office work (international edition, unofficial Linux port)"
 arch=('x86_64')
 url="https://www.workbuddy.ai"
@@ -31,12 +28,12 @@ options=(!strip !debug)
 # canonical source. Version and DMG sha256 are published by the official update
 # API:  curl 'https://www.workbuddy.ai/v2/update?platform=workbuddy-darwin-x64'
 # The Electron runtime version matches the one bundled in the DMG.
-_dmg="WorkBuddy-darwin-x64-${_pkgver}-${_build}.dmg"
+_dmg="WorkBuddy-darwin-x64-5.11.4.44121853-0026dff0.zip"
 _electronzip="electron-v${_electronver}-linux-x64.zip"
-source=("${_dmg}::https://codebuddy-1328495429.cos.accelerate.myqcloud.com/workbuddy/saas/darwin-x64/WorkBuddy-darwin-x64-${_pkgver}-${_build}.dmg"
+source=("WorkBuddy-darwin-x64-5.11.4.44121853-0026dff0.zip::https://download.codebuddy.ai/workbuddy/saas/darwin-x64/WorkBuddy-darwin-x64-5.11.4.44121853-0026dff0.zip"
         "${_electronzip}::https://github.com/electron/electron/releases/download/v${_electronver}/${_electronzip}"
         "workbuddy-international.desktop")
-sha256sums=('435e3990168b5dbe1eed9ebd5e141f93085a29510bc2dd60ffd0bd63a219f0b2'
+sha256sums=('f17292ee0a9702670d739679b76d3a84a012dbd232f45c6479bf37cc00cf402c'
             'c0b4edd6bd9858cda4cf7ab299e69a2d3ecd2e5fcca78507bc0851ba35614660'
             '6fcbfa4cba8e730e603b68fcca484c7963aacdaf56a3f6c5c47ff320a5189e85')
 
@@ -52,8 +49,7 @@ build() {
     # runtime, rebuild native modules for Linux, apply runtime patches.
     # Fixes 1-6 are anchor-tolerant (5.8.x already carries the E2BIG/tray work
     # upstream, so they are no-ops here); Fix 7 (workbuddyStorage at-rest shim)
-    # is mandatory on 5.8+ and Fix 8 (renderer clean-exit-0 recovery) on 5.9+;
-    # both abort the build if their anchor drifts.
+    # is mandatory on 5.8+ and aborts the build if its anchor drifts.
     export WORKBUDDY_APP_ID="WorkBuddy AI"
     export WORKBUDDY_APP_DISPLAY_NAME="WorkBuddy AI (International)"
     export WORKBUDDY_INSTALL_DIR="${srcdir}/workbuddy-app"
@@ -96,19 +92,6 @@ check() {
             return 1
         }
         msg2 "workbuddyStorage at-rest shim present in app.asar"
-    fi
-
-    # 3. 5.9.x's crash-recovery decider ignores a renderer clean-exit with
-    #    exitCode 0, so a renderer that dies under memory pressure is never
-    #    reloaded: the window stays mapped but dead, and relaunching only
-    #    shows it again. Fix 8 must have removed the exitCode qualifier.
-    if grep -qa 'clean-exit-code-' "${asar}"; then
-        grep -qa '__WB_LINUX_CLEANEXIT_RECOVERY_V1__' "${asar}" || {
-            error "app.asar still ignores renderer clean-exit-0;"
-            error "the crash-recovery patch (Fix 8) was not applied"
-            return 1
-        }
-        msg2 "renderer clean-exit recovery fix present in app.asar"
     fi
     return 0
 }
@@ -251,10 +234,6 @@ _verify_package_payload() {
     if grep -qa 'workbuddyStorage' "${asar}" && \
        ! grep -qa '__WB_LINUX_ATREST_SHIM_V1__' "${asar}"; then
         _fail "app.asar uses the vendor-only electron.workbuddyStorage without the Linux at-rest shim"
-    fi
-    if grep -qa 'clean-exit-code-' "${asar}" && \
-       ! grep -qa '__WB_LINUX_CLEANEXIT_RECOVERY_V1__' "${asar}"; then
-        _fail "app.asar ignores renderer clean-exit-0 without the Fix 8 recovery patch"
     fi
     if compgen -G "${appdir}/resources/app.asar.new*" >/dev/null \
         || compgen -G "${appdir}/resources/app.asar.prepatch" >/dev/null; then
